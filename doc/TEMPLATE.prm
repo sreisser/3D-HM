@@ -13,7 +13,7 @@ Grid_scale = 2.0
 Grid_perfil = 90.0 
 
 # Input atoms xyzr file name
-XYZR_FileName = TEMPLATE.xyzr
+XYZR_FileName = XYZRFILE
 ############################## Internal maps ##################################
 
 # Enable/Disable build of epsilon (dielectric) map
