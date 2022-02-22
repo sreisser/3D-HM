@@ -58,7 +58,7 @@ def run_pdb2pqr(pdb_file, pqr_file):
 
     params = pdb2pqr_parser.parse_args(
         [
-            '--assign-only',
+       #     '--assign-only',
             '--apbs-input=apbs.in'
         ] +
         args_ff +
