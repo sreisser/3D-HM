@@ -1,10 +1,10 @@
-# import requests
 import pdb2pqr
 import argparse
 import re
 import subprocess
 import numpy as np
 import datetime
+import config as cf
 
 def check_filename(fname):
     choices = ['pdb', 'pqr']
@@ -295,7 +295,7 @@ if __name__ == "__main__":
 
     ## run NanoShaper
 
-    return_code = subprocess.call(['NanoShaper', prm_file])
+    return_code = subprocess.call([cf.nanoshaper_bin, prm_file])
     print("Output of call() : ", return_code)
 
     # convert surface
@@ -312,15 +312,11 @@ if __name__ == "__main__":
         f.write(apbs_input)
 
     # run APBS
-    # TODO: set apbs_bin in config
-    apbs_dir = '/home/sabine/3D-HM/APBS-3.4.0.Linux'
-    apbs_bin = f'{apbs_dir}/bin/apbs'
-    return_code = subprocess.call([apbs_bin, 'apbs.in'])
+    return_code = subprocess.call([cf.apbs_bin, 'apbs.in'])
     print("Output of call() : ", return_code)
 
-    multivalue_bin = f'{apbs_dir}/share/apbs/tools/bin/multivalue'
     multivalue_output = f'{output_name}.list_pot'
-    return_code = subprocess.call([multivalue_bin,
+    return_code = subprocess.call([cf.multivalue_bin,
                                    converted_surface_file,
                                    f'{pqr_file}.dx',
                                    multivalue_output
