@@ -1,5 +1,8 @@
 
-apbs_dir = '../APBS-3.4.0.Linux'
+# Edit these 2 paths:
+root_dir = '.'
+apbs_dir = 'APBS-3.4.0.Linux'
+
 
 nanoshaper_bin = f'{apbs_dir}/bin/NanoShaper'
 apbs_bin = f'{apbs_dir}/bin/apbs'

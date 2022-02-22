@@ -50,8 +50,8 @@ def run_pdb2pqr(pdb_file, pqr_file):
 
     if not args.ff or args.ff == 'custom':
         args_ff = [
-                f'--userff=../dat/{args.ff}.DAT',
-                f'--usernames=../dat/{args.ff}.names'
+                f'--userff={cf.root_dir}/dat/{args.ff}.DAT',
+                f'--usernames={cf.root_dir}/dat/{args.ff}.names'
         ]
     else:
         args_ff = [f'--ff={args.ff}']
@@ -67,7 +67,6 @@ def run_pdb2pqr(pdb_file, pqr_file):
             pqr_file
         ]
     )
-    print(params)
 
     # Loading topology files
     definition = pdb2pqr.io.get_definitions()
@@ -176,14 +175,12 @@ def calc_hm_vector(multivalue_output):
     output += f'Absolute HM vector {abs_hm_vector:.3f} AkT/e\n'
     output += f'Surface: {n_triangles} triangles, ' \
               f'area: {total_surface:.3f} A**2\n'
-    output += f'Angle between HM vector and z-axis: {angle_z_axis:.3f} degrees'
+    output += f'Angle between HM vector and z-axis: {angle_z_axis:.3f} degrees\n'
 
     with open(f'HM_{output_name}.output', 'w') as f:
         f.write(output)
 
     print(output)
-
-
 
     return hydrophobic_moment_vector, geometric_center
 
@@ -263,7 +260,7 @@ if __name__ == "__main__":
                          help='forcefield')
 
     args = parser.parse_args()
-    print(args)
+
 
     assert args.die > 0, 'Dielectric constant cannot be negative'
     assert check_filename(args.input), 'Invalid filename (expects pqr or pdb)'
@@ -285,7 +282,7 @@ if __name__ == "__main__":
 
     ## create parameter file for NanoShaper
     # TODO: get NanoShaper 0.7 config file
-    with open('../doc/TEMPLATE.prm', 'r') as template:
+    with open(f'{cf.root_dir}/doc/TEMPLATE.prm', 'r') as template:
         temp = template.read()
         prm = temp.replace('XYZRFILE', xyzr_file)
     prm_file = f'{output_name}.prm'
