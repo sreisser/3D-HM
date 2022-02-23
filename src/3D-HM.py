@@ -6,12 +6,51 @@ import numpy as np
 import datetime
 import config as cf
 
-def check_filename(fname):
-    choices = ['pdb', 'pqr']
-    ext = fname.name.split('.')[-1]
-    if ext not in choices:
-        return False
-    return ext
+
+
+
+def file_extension(fname):
+    return fname.name.split('.')[-1]
+
+def read_sequence(fname):
+
+    with open(fname, 'r') as f:
+        content = f.read()
+        result = re.findall('^[A-Za-z\s\n]+$', content, flags=re.MULTILINE)
+
+    sequence = ''.join(result[0].split()).upper()
+    if not sequence:
+        raise BaseException(f'Could not find valid sequence in {fname}')
+
+    non_canonical_amino_acids = re.compile('.*[BJXO].*')
+    if non_canonical_amino_acids.match(sequence):
+        raise BaseException('Found non-canonical amino acid (BJXO)'
+                            ' in sequence. Aborting.')
+    return sequence
+
+
+def create_pdb(sequence, output_pdb):
+    from PeptideBuilder import Geometry
+    import PeptideBuilder
+    first_res = Geometry.geometry(sequence[0])
+    first_res.phi = -60
+    first_res.psi_im1 = -40
+    structure = PeptideBuilder.initialize_res(first_res)
+    for aa in sequence[1:]:
+        geo = Geometry.geometry(aa)
+        geo.phi = -57
+        geo.psi_im1 = -47
+        PeptideBuilder.add_residue(structure, geo)
+    # add terminal oxygen (OXT) to the final glycine
+    PeptideBuilder.add_terminal_OXT(structure)
+
+    import Bio.PDB
+
+    out = Bio.PDB.PDBIO()
+    out.set_structure(structure)
+    out.save(output_pdb)
+    out.save(output_pdb)
+
 
 
 def pqr2xyzr(pqr_file):
@@ -71,7 +110,7 @@ def run_pdb2pqr(pdb_file, pqr_file):
     # Loading topology files
     definition = pdb2pqr.io.get_definitions()
 
-    pdblist, is_cif = pdb2pqr.io.get_molecule(file_name)
+    pdblist, is_cif = pdb2pqr.io.get_molecule(pdb_file)
     # drop water
     pdblist = pdb2pqr.main.drop_water(pdblist)
     # Setting up molecule
@@ -253,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument('--die', type=float, default=78.54,
                         help='dielectric constant')
     parser.add_argument('input', type=argparse.FileType('r'),
-                        help='Input pdb file/pqr file')
+                        help='Input pdb/pqr/seq file')
     parser.add_argument('--ff', type=str,
                          choices=['AMBER', 'CHARMM', 'PARSE', 'custom'],
                          default='custom',
@@ -263,18 +302,28 @@ if __name__ == "__main__":
 
 
     assert args.die > 0, 'Dielectric constant cannot be negative'
-    assert check_filename(args.input), 'Invalid filename (expects pqr or pdb)'
 
     file_name = args.input.name
-    file_type = check_filename(args.input)
+    file_type = file_extension(args.input)
     output_name = args.output
 
     if file_type == 'pqr':
         pqr_file = file_name
-    else:
+    elif file_type == 'pdb':
         # Use pdb2pqr to create pqr file
         pqr_file = f'{output_name}.pqr'
         run_pdb2pqr(file_name, pqr_file)
+    else:
+        # expect amino acid sequence
+        sequence = read_sequence(file_name)
+
+        print(sequence)
+        pdb_file = f'{output_name}.pdb'
+        create_pdb(sequence, pdb_file)
+        pqr_file = f'{output_name}.pqr'
+        run_pdb2pqr(pdb_file, pqr_file)
+
+        assert False
 
     xyzr_file = pqr2xyzr(pqr_file)
 

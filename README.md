@@ -6,14 +6,14 @@ Use either pqr as input or pdb, which will be converted
 into pqr.
 
 ## Installation
-### Use conda environment
+### Use conda environment with python 3.10
 ```
 conda create --name 3D-HM python=3.10
 conda activate 3D-HM
 ```
-Install pdb2pqr
+Install requirements
 ```
-pip install pdb2pqr
+pip install -r requirements.txt
 ```
 
 
