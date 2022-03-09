@@ -1,0 +1,11 @@
+source leaprc.protein.ff14SB
+
+peptid=sequence { SEQUENCE }
+impose peptid { SEQ_NUMBERS } {
+{ "N" "CA" "C" "N" -47 }
+{ "C" "N" "CA" "C" -57 }
+}
+
+savepdb peptid OUTPUT
+
+quit
