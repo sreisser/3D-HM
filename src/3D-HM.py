@@ -1,278 +1,22 @@
-import pdb2pqr
+import logging
+import os
 import argparse
 import re
 import subprocess
 import numpy as np
 import datetime
-import config as cf
+from config import *
+import shutil
+import inputgen
+import hm_vector
+import utils
+import output
+import surface
 
+logging.basicConfig(format='%(levelname)s:%(name)s: %(message)s',
+                    level=20)
+logger = logging.getLogger(f"3D-HM")
 
-
-
-def file_extension(fname):
-    return fname.name.split('.')[-1]
-
-def read_sequence(fname):
-
-    with open(fname, 'r') as f:
-        content = f.read()
-        result = re.findall('^[A-Za-z\s\n]+$', content, flags=re.MULTILINE)
-
-    sequence = ''.join(result[0].split()).upper()
-    if not sequence:
-        raise BaseException(f'Could not find valid sequence in {fname}')
-
-    non_canonical_amino_acids = re.compile('.*[BJXO].*')
-    if non_canonical_amino_acids.match(sequence):
-        raise BaseException('Found non-canonical amino acid (BJXO)'
-                            ' in sequence. Aborting.')
-    return sequence
-
-
-def create_pdb(sequence, output_pdb):
-    from PeptideBuilder import Geometry
-    import PeptideBuilder
-    first_res = Geometry.geometry(sequence[0])
-    first_res.phi = -60
-    first_res.psi_im1 = -40
-    structure = PeptideBuilder.initialize_res(first_res)
-    for aa in sequence[1:]:
-        geo = Geometry.geometry(aa)
-        geo.phi = -57
-        geo.psi_im1 = -47
-        PeptideBuilder.add_residue(structure, geo)
-    # add terminal oxygen (OXT) to the final glycine
-    PeptideBuilder.add_terminal_OXT(structure)
-
-    import Bio.PDB
-
-    out = Bio.PDB.PDBIO()
-    out.set_structure(structure)
-    out.save(output_pdb)
-    out.save(output_pdb)
-
-
-
-def pqr2xyzr(pqr_file):
-    pqrfile_handle = open(pqr_file, "r")
-    pqrfile_content = pqrfile_handle.readlines()
-    pqrfile_handle.close()
-
-    xyzr_name = pqr_file.replace('.pqr', '.xyzr')
-
-    re_pqr = re.compile(
-        "^ATOM\s{2}([0-9\s]{5})\s([A-Z0-9\s]{4}).([A-Z\s]{4}).([0-9\s]{4})"
-        ".\s{3}([0-9\-\.\s]{8})([0-9\-\.\s]{8})([0-9\-\.\s]{8})\s+([0-9\.\-]+)"
-        "\s+([0-9\.\-]+)\s*$")
-
-    xyzrfile_content = ""
-    for line in pqrfile_content:
-        atom = re_pqr.match(line)
-        if atom:
-            x = float(atom.group(5))
-            y = float(atom.group(6))
-            z = float(atom.group(7))
-            radius = float(atom.group(9))
-
-            xyzrfile_content += "%f %f %f %f\n" % (x, y, z, radius)
-
-    xyzr_file = open(xyzr_name, "w")
-    xyzr_file.write(xyzrfile_content)
-    xyzr_file.close()
-    print(f"xyzr file generated from file {pqr_file}")
-
-    return xyzr_name
-
-
-def run_pdb2pqr(pdb_file, pqr_file):
-    pdb2pqr_parser = pdb2pqr.main.build_main_parser()
-
-    if not args.ff or args.ff == 'custom':
-        args_ff = [
-                f'--userff={cf.root_dir}/dat/{args.ff}.DAT',
-                f'--usernames={cf.root_dir}/dat/{args.ff}.names'
-        ]
-    else:
-        args_ff = [f'--ff={args.ff}']
-
-    params = pdb2pqr_parser.parse_args(
-        [
-       #     '--assign-only',
-            '--apbs-input=apbs.in'
-        ] +
-        args_ff +
-        [
-            pdb_file,
-            pqr_file
-        ]
-    )
-
-    # Loading topology files
-    definition = pdb2pqr.io.get_definitions()
-
-    pdblist, is_cif = pdb2pqr.io.get_molecule(pdb_file)
-    # drop water
-    pdblist = pdb2pqr.main.drop_water(pdblist)
-    # Setting up molecule
-    biomolecule, definition, ligand = pdb2pqr.main.setup_molecule(
-        pdblist, definition, None
-    )
-
-    # Setting termini states for biomolecule chains
-    biomolecule.set_termini(params.neutraln, params.neutralc)
-
-    results = pdb2pqr.main.non_trivial(
-        args=params,
-        biomolecule=biomolecule,
-        ligand=ligand,
-        definition=definition,
-        is_cif=is_cif,
-    )
-
-    #  print(results['header'])
-
-    pdb2pqr.main.print_pqr(
-        args=params,
-        pqr_lines=results["lines"],
-        header_lines=results["header"],
-        missing_lines=results["missed_residues"],
-        is_cif=is_cif,
-    )
-
-    if params.apbs_input:
-        pdb2pqr.io.dump_apbs(params.output_pqr, params.apbs_input)
-
-
-def write_converted_surface(surface_file, converted_surface_file):
-    with open(surface_file, 'r') as f:
-        surface = f.read()
-
-    reg_vert = re.compile(
-        "(\-*[0-9]+\.[0-9]+)\s+(\-*[0-9]+\.[0-9]+)\s+(\-*[0-9]+\.[0-9]+)\s*\n")
-    reg_tri = re.compile("3\s([0-9]+)\s+([0-9]+)\s+([0-9]+)\s*\n")
-
-    vertices = reg_vert.findall(surface)
-    vertices = np.array(vertices)
-
-    triangles = reg_tri.findall(surface)
-    triangles = np.array(triangles).astype(int)
-
-    output = ''
-    for triangle in triangles:
-        for i in triangle:
-            output += ",".join(vertices[i]) + '\n'
-
-    with open(converted_surface_file, 'w') as f:
-        f.write(output)
-
-def calc_hm_vector(multivalue_output):
-    with open(multivalue_output, 'r') as f:
-        esp_on_surface = f.read()
-
-    reg_coordinates = re.compile(
-        "([0-9\.\-e\+]+),([0-9\.\-e\+]+),([0-9\.\-e\+]+),([0-9\.\-e\+]+)\n")
-
-    coordinates_esp = reg_coordinates.findall(esp_on_surface)
-    # reshaping generates array of triangles:
-    # 3 corners form one triangle
-    # one corner has 4 values: x, y, z, ESP
-    coordinates_esp = np.array(coordinates_esp).astype(float) \
-        .reshape((-1, 3, 4))
-
-    # need these three arrays for HM vector calculation
-    esp_absolute = np.abs(coordinates_esp[:, :, 3]).reshape(-1, 3, 1)
-    coordinates = coordinates_esp[:, :, :3]
-    triangle_areas = np.array(list(map(triangle_area, coordinates)))
-    triangle_areas = triangle_areas.reshape(-1, 1, 1)
-    n_triangles = triangle_areas.shape[0]
-
-    total_surface = np.sum(triangle_areas)
-    sum_vertex_vectors = np.sum(coordinates * triangle_areas / 3, axis=(1, 0))
-    geometric_center = sum_vertex_vectors / total_surface
-    average_esp_abs = np.sum(esp_absolute * triangle_areas / 3) \
-                      / total_surface
-
-    sum_hm_vectors = np.sum(
-        coordinates * esp_absolute * triangle_areas / 3, axis=(1, 0))
-
-    hydrophobic_moment_vector = -(sum_hm_vectors -
-                                  average_esp_abs * sum_vertex_vectors) / \
-                                total_surface
-    abs_hm_vector = np.linalg.norm(hydrophobic_moment_vector)
-
-    angle_z_axis = angle_with_z(hydrophobic_moment_vector)
-    geometric_center_str = [f'{i:.3f}' for i in geometric_center]
-    hm_vector_str = [f'{i:.3f}' for i in hydrophobic_moment_vector]
-
-    output = f'3D hydrophobic moment vector calculation performed on ' \
-             f'{datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")}\n'
-    output += f'Average absolute ESP on surface: {average_esp_abs:.3f}\n'
-    output += f'Geometric molecule center: ' \
-              f'{" ".join(geometric_center_str)}\n'
-    output += f'Hydrophobic moment vector: ' \
-              f'{" ".join(hm_vector_str)}\n'
-    output += f'Absolute HM vector {abs_hm_vector:.3f} AkT/e\n'
-    output += f'Surface: {n_triangles} triangles, ' \
-              f'area: {total_surface:.3f} A**2\n'
-    output += f'Angle between HM vector and z-axis: {angle_z_axis:.3f} degrees\n'
-
-    with open(f'HM_{output_name}.output', 'w') as f:
-        f.write(output)
-
-    print(output)
-
-    return hydrophobic_moment_vector, geometric_center
-
-
-def triangle_area(triangle):
-    a = np.linalg.norm(triangle[1, :3] - triangle[0, :3])
-    b = np.linalg.norm(triangle[2, :3] - triangle[0, :3])
-    c = np.linalg.norm(triangle[2, :3] - triangle[1, :3])
-    s = 0.5 * (a + b + c)
-    return np.sqrt(s * (s - a) * (s - b) * (s - c))
-
-def angle_with_z(hm_vector):
-    z_axis = np.array([0, 0, 1])
-    return np.arccos(np.dot(hm_vector, z_axis) /
-                   (np.linalg.norm(hm_vector) * np.linalg.norm(z_axis))) \
-           * 180 / np.pi
-
-def write_pqr_with_hm(pqr_file, hm_vector, geometric_center):
-
-    with open(pqr_file, 'r') as f:
-        pqr_content = f.read()
-
-    # print all atoms
-    reg_atom = re.compile("ATOM.*\n")
-    atoms = reg_atom.findall(pqr_content)
-    output = "".join(atoms)
-
-    # print pseudo-atoms forming the HM vector
-    hm_abs = np.linalg.norm(hm_vector)
-    hm_normalized = hm_vector/hm_abs
-    n_points = int(np.ceil(hm_abs)) + 1
-    dist_points = hm_abs / (n_points - 1)
-
-    for i in range(n_points):
-        if i == 0:
-            # vector starts in geometric center of molecule
-            output += "ATOM    999  GMC HYM    99    " \
-                      f"{geometric_center[0]:8.3f}" \
-                      f"{geometric_center[1]:8.3f}" \
-                      f"{geometric_center[2]:8.3f}  0.0000 1.0000\n"
-        else:
-            if i < n_points - 1:
-                name = 'X'
-            else:
-                name = 'TIP'
-            point = geometric_center + i * dist_points * hm_normalized
-            output += f"ATOM    999  {name:3s} HYM    99    " \
-                      f"{point[0]:8.3f}" \
-                      f"{point[1]:8.3f}" \
-                      f"{point[2]:8.3f}  0.0000 1.0000\n"
-
-    with open(f'{output_name}_with_HM.pqr', 'w') as f:
-        f.write(output)
 
 if __name__ == "__main__":
     '''
@@ -292,11 +36,27 @@ if __name__ == "__main__":
     parser.add_argument('--die', type=float, default=78.54,
                         help='dielectric constant')
     parser.add_argument('input', type=argparse.FileType('r'),
-                        help='Input pdb/pqr/seq file')
+                        help='Input pdb/pqr/seq file'
+                        )
     parser.add_argument('--ff', type=str,
                          choices=['AMBER', 'CHARMM', 'PARSE', 'custom'],
                          default='custom',
-                         help='forcefield')
+                         help='forcefield'
+                        )
+    parser.add_argument('--neutraln',
+                        action="store_true",
+                        default=False,
+                        help="Make the N-terminus of a protein neutral "
+                             "(default is charged). Requires PARSE force "
+                             "field."
+                        )
+    parser.add_argument("--neutralc",
+                        action="store_true",
+                        default=False,
+                        help="Make the C-terminus of a protein neutral "
+                             "(default is charged). Requires PARSE force "
+                             "field."
+    )
 
     args = parser.parse_args()
 
@@ -304,51 +64,59 @@ if __name__ == "__main__":
     assert args.die > 0, 'Dielectric constant cannot be negative'
 
     file_name = args.input.name
-    file_type = file_extension(args.input)
+    file_extension = file_name.split('.')[-1]
     output_name = args.output
+    output_dir = f'{output_name}_OUT'
 
-    if file_type == 'pqr':
+    logger.info(f'Creating output directory {output_dir} and copying '
+                f'input file there.')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    shutil.copyfile(file_name, os.path.join(output_dir, file_name))
+
+    os.chdir(output_dir)
+
+    if file_extension == 'pqr':
         pqr_file = file_name
-    elif file_type == 'pdb':
+    elif file_extension == 'pdb':
         # Use pdb2pqr to create pqr file
         pqr_file = f'{output_name}.pqr'
-        run_pdb2pqr(file_name, pqr_file)
+        inputgen.run_pdb2pqr(file_name, pqr_file)
     else:
         # expect amino acid sequence
-        sequence = read_sequence(file_name)
+        sequence = inputgen.read_sequence(file_name)
+        logger.info(f'Read sequence: {sequence}')
 
-        print(sequence)
-        pdb_file = f'{output_name}.pdb'
-        create_pdb(sequence, pdb_file)
-        pqr_file = f'{output_name}.pqr'
-        run_pdb2pqr(pdb_file, pqr_file)
+        pdb_file = inputgen.create_pdb(sequence, output_name)
+        pqr_file = inputgen.run_pdb2pqr(pdb_file, output_name, args)
 
-        assert False
-
-    xyzr_file = pqr2xyzr(pqr_file)
+    xyzr_file = inputgen.pqr2xyzr(pqr_file)
 
     # use NanoShaper to calculate surface
 
     ## create parameter file for NanoShaper
-    # TODO: get NanoShaper 0.7 config file
-    with open(f'{cf.root_dir}/doc/TEMPLATE.prm', 'r') as template:
+    with open(f'{DIR_3DHM}/templates/nanoshaper.prm', 'r') as template:
         temp = template.read()
         prm = temp.replace('XYZRFILE', xyzr_file)
     prm_file = f'{output_name}.prm'
     with open(prm_file, 'w') as prmfile:
         prmfile.write(prm)
-    print(f'Created input file {prm_file} for NanoShaper')
+    logger.info(f'Created input file {prm_file} for NanoShaper')
 
     ## run NanoShaper
 
-    return_code = subprocess.call([cf.nanoshaper_bin, prm_file])
-    print("Output of call() : ", return_code)
+    with open(f'{output_name}.NanoShaper', 'w') as out:
+        return_code = subprocess.run([BIN_NANOSHAPER, prm_file],
+                                  stdout=out,
+                                  stderr=subprocess.STDOUT
+                                  )
+
 
     # convert surface
     surface_file = 'triangulatedSurf.off'
 
-    converted_surface_file = f'{output_name}.tri.list'
-    write_converted_surface(surface_file, converted_surface_file)
+
+    converted_surface_file = surface.write_converted_surface(surface_file, output_name)
 
     # set dielectric constant for APBS electrostatic potential calculation
     with open('apbs.in', 'r') as f:
@@ -358,17 +126,26 @@ if __name__ == "__main__":
         f.write(apbs_input)
 
     # run APBS
-    return_code = subprocess.call([cf.apbs_bin, 'apbs.in'])
-    print("Output of call() : ", return_code)
+    with open(f'{output_name}.apbs', 'w') as out:
+        return_code = subprocess.call([BIN_APBS, 'apbs.in'],
+                                      stdout=out,
+                                      stderr=subprocess.STDOUT
+                                      )
 
+
+    # project electrostatic potential onto surface
     multivalue_output = f'{output_name}.list_pot'
-    return_code = subprocess.call([cf.multivalue_bin,
+    return_code = subprocess.call([BIN_MULTIVALUE,
                                    converted_surface_file,
                                    f'{pqr_file}.dx',
                                    multivalue_output
                                    ],
                                   stdout=subprocess.DEVNULL)
 
-    hm_vector, geometric_center = calc_hm_vector(multivalue_output)
+    HM_vector, geometric_center = hm_vector.calc_hm_vector(multivalue_output,
+                                                           output_name)
 
-    write_pqr_with_hm(pqr_file, hm_vector, geometric_center)
+    output.write_pqr_with_hm(pqr_file,
+                             HM_vector,
+                             geometric_center,
+                             output_name)
