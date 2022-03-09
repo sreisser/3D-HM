@@ -1,15 +1,11 @@
 import logging
 import os
 import argparse
-import re
 import subprocess
-import numpy as np
-import datetime
 from config import *
 import shutil
 import inputgen
 import hm_vector
-import utils
 import output
 import surface
 
@@ -31,7 +27,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Calculate 3D Hydrophobic '
                                                  'Moment Vector',
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-o', '--output', metavar='output', type=str,
+    parser.add_argument('-o', '--output', type=str,
                         default='output', help='output name')
     parser.add_argument('--die', type=float, default=78.54,
                         help='dielectric constant')
@@ -57,6 +53,12 @@ if __name__ == "__main__":
                              "(default is charged). Requires PARSE force "
                              "field."
     )
+    parser.add_argument("--nocleanup",
+                        dest='cleanup',
+                        action="store_false",
+                        default=True,
+                        help="Keep all intermediate files of the calculation"
+    )
 
     args = parser.parse_args()
 
@@ -78,19 +80,22 @@ if __name__ == "__main__":
 
     if file_extension == 'pqr':
         pqr_file = file_name
-    elif file_extension == 'pdb':
-        # Use pdb2pqr to create pqr file
-        pqr_file = f'{output_name}.pqr'
-        inputgen.run_pdb2pqr(file_name, pqr_file)
+        inputgen.generate_apbs_input(pqr_file, 'apbs.in')
     else:
-        # expect amino acid sequence
-        sequence = inputgen.read_sequence(file_name)
-        logger.info(f'Read sequence: {sequence}')
+        if file_extension == 'pdb':
+            pdb_file = file_name
 
-        pdb_file = inputgen.create_pdb(sequence, output_name)
+        else:
+            # expect amino acid sequence
+            sequence = inputgen.read_sequence(file_name)
+            logger.info(f'Read sequence: {sequence}')
+
+            pdb_file = inputgen.create_pdb(sequence, output_name)
+
+        # Use pdb2pqr to create pqr file
         pqr_file = inputgen.run_pdb2pqr(pdb_file, output_name, args)
 
-    xyzr_file = inputgen.pqr2xyzr(pqr_file)
+    xyzr_file = inputgen.pqr2xyzr(pqr_file, output_name)
 
     # use NanoShaper to calculate surface
 
@@ -149,3 +154,34 @@ if __name__ == "__main__":
                              HM_vector,
                              geometric_center,
                              output_name)
+
+    if args.cleanup:
+        logger.info('Removing intermediate files.')
+        files_to_remove = [
+            'apbs.in',
+            'exposedIndices.txt',
+            'exposed.xyz',
+            'io.mc',
+            'leap.log',
+            f'{file_name}.dx',
+            f'{output_name}.apbs',
+            f'{output_name}.list_pot',
+            f'{output_name}.NanoShaper',
+            f'{output_name}.pqr.dx',
+            f'{output_name}.prm',
+            f'{output_name}.tleap_out',
+            f'{output_name}.tri.list',
+            f'{output_name}.xyzr',
+            'stderror.txt',
+            'tleap.in',
+            'triangleAreas.txt',
+            'triangulatedSurf.off',
+        ]
+
+        for f in files_to_remove:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
+

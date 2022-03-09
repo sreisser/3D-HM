@@ -98,6 +98,14 @@ def create_pdb(sequence, output):
                                       )
         return output_pdb
 
+def generate_apbs_input(pqr, output):
+    size_obj = pdb2pqr.psize.Psize()
+    size_obj.run_psize(pqr)
+    input = pdb2pqr.inputgen.Input(pqr, size_obj, 'mg-auto', False, potdx=True)
+    input.print_input_files(output)
+
+
+
 def run_pdb2pqr(pdb_file, output, args):
     pqr_file = f'{output}.pqr'
 
@@ -173,13 +181,13 @@ def run_pdb2pqr(pdb_file, output, args):
     return pqr_file
 
 
-def pqr2xyzr(pqr_file):
+def pqr2xyzr(pqr_file, output):
 
     pqrfile_handle = open(pqr_file, "r")
     pqrfile_content = pqrfile_handle.readlines()
     pqrfile_handle.close()
 
-    xyzr_name = pqr_file.replace('.pqr', '.xyzr')
+    xyzr_name = f'{output}.xyzr'
 
     re_pqr = re.compile(
         "^ATOM\s{2}([0-9\s]{5})\s([A-Z0-9\s]{4}).([A-Z\s]{4}).([0-9\s]{4})"
