@@ -1,0 +1,12 @@
+
+Sequence as input:
+python ../src/3D-HM.py  -o seq_as_input test.seq
+Output in seq_as_input_OUT
+
+PDB as input:
+python ../src/3D-HM.py  -o pdb_as_input test.pdb
+Output in pdb_as_input_OUT
+
+PQR as input:
+python ../src/3D-HM.py  -o pqr_as_input test.pqr
+Output in pqr_as_input_OUT
