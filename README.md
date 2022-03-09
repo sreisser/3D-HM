@@ -6,7 +6,22 @@ Use either pqr as input or pdb, which will be converted
 into pqr.
 
 ## Installation
-### Use conda environment with python 3.10
+
+There are three different ways how to use 3D-HM. 
+1) Amino acid sequence of a helical peptide as input.
+In this case you need to install AmberTools to generate a pdb
+model of the peptide. Please follow the instructions 
+[here](https://ambermd.org/GetAmber.php)
+2) pdb file as input. pdb2pqr is called with a given
+force field to generate a pqr file (containing partial charges
+and atomic radii). This is then used for surface and electrostatics
+calculation.
+3) pqr file as input. This gives you most control and flexibility.
+You can also use special chemical groups or residues, or
+nucleic acids in your structure.
+
+### Create conda environment
+
 ```
 conda create --name 3D-HM python=3.10
 conda activate 3D-HM
@@ -27,12 +42,18 @@ https://github.com/Electrostatics/apbs/releases and unzip.
 Edit config.py:
 Set 3D-HM root directory:
 ```
-root_dir = ''
+DIR_3DHM = ''
 ```
 
 Set APBS root directory:
 ```
-apbs_dir = ''
+DIR_APBS = ''
+```
+
+If you need to create helical pdb files with AmberTools,
+set the AmberTools directory:
+```
+DIR_AMBERTOOLS = ''
 ```
 
 ### Run program 
