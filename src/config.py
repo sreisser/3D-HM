@@ -1,3 +1,10 @@
+# Copyright (c) 2022, Sabine Reisser
+# All rights reserved.
+
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+
 
 # Edit these 3 paths:
 # absolute path to 3D-HM directory
