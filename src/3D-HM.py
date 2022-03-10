@@ -30,28 +30,27 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output', type=str,
                         default='output', help='output name')
     parser.add_argument('--die', type=float, default=78.54,
-                        help='dielectric constant')
+                        help='dielectric constant for APBS electrostatics '
+                             'calculation')
     parser.add_argument('input', type=argparse.FileType('r'),
                         help='Input pdb/pqr/seq file'
                         )
     parser.add_argument('--ff', type=str,
                          choices=['AMBER', 'CHARMM', 'PARSE', 'custom'],
                          default='custom',
-                         help='forcefield'
+                         help='forcefield used by pdb2pqr'
                         )
     parser.add_argument('--neutraln',
                         action="store_true",
                         default=False,
                         help="Make the N-terminus of a protein neutral "
-                             "(default is charged). Requires PARSE force "
-                             "field."
+                             "(pdb2pqr option)"
                         )
     parser.add_argument("--neutralc",
                         action="store_true",
                         default=False,
                         help="Make the C-terminus of a protein neutral "
-                             "(default is charged). Requires PARSE force "
-                             "field."
+                             "(pdb2pqr option)"
     )
     parser.add_argument("--nocleanup",
                         dest='cleanup',

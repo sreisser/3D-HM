@@ -113,12 +113,12 @@ def run_pdb2pqr(pdb_file, output, args):
     pdb2pqr_args = ['--apbs-input=apbs.in']
 
     if not args.ff or args.ff == 'custom':
-        args_ff = [
+        pdb2pqr_args += [
                 f'--userff={DIR_3DHM}/dat/{args.ff}.DAT',
                 f'--usernames={DIR_3DHM}/dat/{args.ff}.names'
         ]
     else:
-        args_ff = [f'--ff={args.ff}']
+        pdb2pqr_args += [f'--ff={args.ff}']
 
     if args.neutraln:
         if protonated(pdb_file):
@@ -133,16 +133,14 @@ def run_pdb2pqr(pdb_file, output, args):
             pdb2pqr_args.append('--neutralc')
 
     params = pdb2pqr_parser.parse_args(
-        [
-       #     '--assign-only',
-            '--apbs-input=apbs.in'
-        ] +
-        args_ff +
+        pdb2pqr_args +
         [
             pdb_file,
             pqr_file
         ]
     )
+
+    print(pdb2pqr_args)
 
     # Loading topology files
     definition = pdb2pqr.io.get_definitions()
@@ -190,12 +188,15 @@ def pqr2xyzr(pqr_file, output):
     xyzr_name = f'{output}.xyzr'
 
     re_pqr = re.compile(
-        "^ATOM\s{2}([0-9\s]{5})\s([A-Z0-9\s]{4}).([A-Z\s]{4}).([0-9\s]{4})"
+        "^ATOM\s{2}([0-9\s]{5})\s([A-Z0-9\s]{4}).([A-Z\s]{4}).([\-0-9\s]{4})"
         ".\s{3}([0-9\-\.\s]{8})([0-9\-\.\s]{8})([0-9\-\.\s]{8})\s+([0-9\.\-]+)"
         "\s+([0-9\.\-]+)\s*$")
 
     total_charge = 0.
     xyzrfile_content = ""
+
+    res_charge = 0
+    old_res = 0
     for line in pqrfile_content:
         atom = re_pqr.match(line)
         if atom:
@@ -208,7 +209,16 @@ def pqr2xyzr(pqr_file, output):
             # check charge
             total_charge += float(atom.group(8))
 
-    if total_charge % 1 > 1e-5:
+            res = atom.group(4)
+            if res != old_res:
+                print(f'{atom.group(4)}, {np.round(res_charge, 4)}')
+                res_charge = float(atom.group(8))
+            else:
+                res_charge += float(atom.group(8))
+            old_res = res
+
+
+    if np.abs(np.round(total_charge, 6)) % 1 != 0:
         logger.warning(f'Total charge is not integer: {total_charge}!')
     else:
         logger.info(f'Total charge: {total_charge:.2f}')
