@@ -1,8 +1,11 @@
 
 # Edit these 3 paths:
-DIR_3DHM = '/home/sabine/3D-HM'
-DIR_APBS = '/home/sabine/3D-HM/APBS-3.4.0.Linux'
-DIR_AMBERTOOLS = '/home/sabine/anaconda3/envs/AmberTools21'
+# absolute path to 3D-HM directory
+DIR_3DHM = ''
+# absolute path to APBS directory
+DIR_APBS = ''
+# absolute path to AmberTools directory
+DIR_AMBERTOOLS = ''
 
 
 # do not change anything here
@@ -13,4 +16,4 @@ BIN_MULTIVALUE = f'{DIR_APBS}/share/apbs/tools/bin/multivalue'
 
 
 
-VERSION = 0.1
+VERSION = 1.0
